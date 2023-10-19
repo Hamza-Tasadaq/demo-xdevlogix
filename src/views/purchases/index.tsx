@@ -167,8 +167,7 @@ const Purchases: FC = () => {
   }, [open]);
 
   const handleEdit = (data: Purchase | null) => {
-    setSelectedPurchase(data);
-    toggleModal();
+    toast.error("pending")
   };
 
   const handleDelete = (data: Purchase | null) => {

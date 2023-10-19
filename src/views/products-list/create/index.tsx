@@ -12,7 +12,7 @@ import { BiLoaderAlt as Loader } from "react-icons/bi";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { useGetUnitsQuery } from "@/store/services/unitService";
 import { useGetTaxratesQuery } from "@/store/services/taxrateService";
@@ -44,10 +44,8 @@ import { Taxrate } from "@/views/taxrates";
 import { useGetBrandsQuery } from "@/store/services/brandService";
 import { Brand } from "@/views/brands";
 import { useGetBarcodesQuery } from "@/store/services/barCodeService";
-import { useUpdateProductMutation } from "@/store/services/productService";
-import { useGetSpecificProductsQuery } from "@/store/services/productService";
 import { Barcode } from "@/views/bar-codes";
-
+import useProduct from "@/hooks/useProduct";
 
 const formSchema = z.object({
   name: z.string().min(1, { message: "Name is required." }),
@@ -99,73 +97,37 @@ const formSchema = z.object({
 const CreateProduct = () => {
   const { data: session } = useSession();
 
-  const {get} = useSearchParams();
-  const productId=get("id");
-  
-  
+  const { product } = useProduct();
   const router = useRouter();
-
-  
-  const specificProductData = useGetSpecificProductsQuery({
-    id: productId,
-  }).data;
-
- useEffect(() => {
-  if (specificProductData) {
-    const productData = specificProductData.data[0];
-    console.log(specificProductData);
-    form.setValue("barcode_id", productData.barcode_id || "");
-    form.setValue("sku", productData.sku ||""), 
-    form.setValue("type", productData.type || "Single"),
-    form.setValue("location_id", productData.location_id || ""),
-    form.setValue("brand_id", productData.brand_id || "");
-    form.setValue("business_id", productData.business_id || "");
-    form.setValue("category_id", productData.category_id || "");
-    form.setValue("description", productData.description || "");
-    form.setValue("tax_id", productData.tax_id || "");
-    form.setValue("weight", productData.weight || "");
-    form.setValue("quantity", productData.quantity || "");
-    form.setValue("profit_margin", productData.profit_margin || "");
-    form.setValue("price_inclusive_tax", productData.price_inclusive_tax || "");
-    form.setValue("price_exclusive_tax", productData.price_exclusive_tax || "");
-    form.setValue("selling_price", productData.selling_price || "");
-    form.setValue("tax_type", productData.tax_type || "");
-    form.setValue("selling_price_inc_tax", productData.selling_price_inc_tax || "");
-    form.setValue("manage_stock_status", Boolean(productData.manage_stock_status));
-    form.setValue("name", productData.name || "");
-  }
-}, [specificProductData]);
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name:  specificProductData?.name || "",
-      sku: specificProductData?.sku || "",
-      type:  specificProductData?.type||"",
-      description: specificProductData?.description ||"",
-      tax_type: specificProductData?.tax_type || "",
-      location_id: specificProductData?.location_id || "",
-      unit_id: specificProductData?.unit_id ||"",
-      manage_stock_status: false,
-      selling_price: specificProductData?.selling_price || "",
-      selling_price_inc_tax: specificProductData?.selling_price_inc_tax|| "",
-      quantity: specificProductData?.quantity || "",
+      name: product?.name || "",
+      sku: product?.sku || "",
+      type: product?.type || "",
+      description: product?.description || "",
+      tax_type: product?.tax_type || "",
+      location_id: "",
+      unit_id: String(product?.unit_id) || "",
+      manage_stock_status: !!product?.manage_stock_status || false,
+      selling_price: "",
+      selling_price_inc_tax: "",
+      quantity: "",
       product_images: [],
-      category_id:specificProductData?.category_id  || "",
-      price_exclusive_tax:  specificProductData?.price_exclusive_tax ||"",
-      price_inclusive_tax: specificProductData?.price_inclusive_tax || "",
-      profit_margin: specificProductData?.profit_margin || "",
-      brand_id: specificProductData?.brand_id || "",
-      barcode_id: specificProductData?.barcode_id ||"",
-      tax_id: specificProductData?.tax_id ||"",
-      weight: specificProductData?.weight ||"",
+      category_id: "",
+      price_exclusive_tax: "",
+      price_inclusive_tax: "",
+      profit_margin: "",
+      brand_id: "",
+      barcode_id: "",
+      tax_id: "",
+      weight: "",
       variation_list: [],
-      business_id: Number (session?.user?.business_id),
+      business_id: Number(session?.user?.business_id),
     },
   });
-    
- console.log(form.watch())
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "variation_list",
@@ -221,8 +183,6 @@ const CreateProduct = () => {
       perPage: -1,
     });
 
-  
-
   const variations = useMemo(() => {
     return variationsList?.find(
       (list) => String(list.id) === form.watch("variation_id")
@@ -238,18 +198,12 @@ const CreateProduct = () => {
   }, [variations]);
 
   const [create, createResponse] = useCreateProductMutation();
-  const [update, updateResponse] = useUpdateProductMutation();
- 
+
   const {
     isLoading: createLoading,
     isError: createError,
     isSuccess: createSuccess,
   } = createResponse;
-  const {
-    isLoading: updateLoading,
-    isError: updateError,
-    isSuccess: updateSuccess,
-  } = updateResponse;
 
   useEffect(() => {
     if (createError) {
@@ -261,105 +215,91 @@ const CreateProduct = () => {
     }
   }, [createError, createSuccess]);
 
-  useEffect(() => {
-    if (updateError) {
-      toast.error("Something Wrong.");
-    }
-    if (updateSuccess) {
-      toast.success("Product Update Successfully.");
-      router.push("/products/products-list");
-    }
-  }, [updateError, updateSuccess]);
-
-
   function onSubmit(values: z.infer<typeof formSchema>) {
-    const isEditing = productId !== undefined;
-    const formdata = new FormData();
-    formdata.append("name", values.name);
-    formdata.append("description", values.description);
-    if (values.sku) {
-      formdata.append("sku", values.sku);
-    }
-    formdata.append("type", values.type);
-    formdata.append("unit_id", values.unit_id);
-    formdata.append("business_id", values.business_id?.toString());
-    formdata.append(
-      "manage_stock_status",
-      values.manage_stock_status ? "1" : "0"
-    );
-    formdata.append(`product_price[tax_type]`, values.tax_type);
-    if (values.type === "single") {
+    if (product === null) {
+      const formdata = new FormData();
+      formdata.append("name", values.name);
+      formdata.append("description", values.description);
+      if (values.sku) {
+        formdata.append("sku", values.sku);
+      }
+      formdata.append("type", values.type);
+      formdata.append("unit_id", values.unit_id);
+      formdata.append("business_id", values.business_id?.toString());
       formdata.append(
-        `product_price[0][selling_price]`,
-        String(values.selling_price)
+        "manage_stock_status",
+        values.manage_stock_status ? "1" : "0"
       );
-      formdata.append(
-        `product_price[0][price_exclusive_tax]`,
-        String(values.price_exclusive_tax)
-      );
-      formdata.append(
-        `product_price[0][price_inclusive_tax]`,
-        String(values.price_inclusive_tax)
-      );
-      formdata.append(
-        `product_price[0][profit_margin]`,
-        String(values.profit_margin)
-      );
-      formdata.append(
-        `product_price[0][selling_price_inc_tax]`,
-        String(values.selling_price_inc_tax)
-      );
-      formdata.append(
-        `product_price[0][selling_price_inc_tax]`,
-        String(values.selling_price_inc_tax)
-      );
-    }
-  
-    if (values.type === "variable") {
-      values?.variation_list?.forEach((variation, index) => {
+      formdata.append(`product_price[tax_type]`, values.tax_type);
+      if (values.type === "single") {
         formdata.append(
-          `product_price[${index}][price_exclusive_tax]`,
-          variation.price_exclusive_tax
+          `product_price[0][selling_price]`,
+          String(values.selling_price)
         );
         formdata.append(
-          `product_price[${index}][price_inclusive_tax]`,
-          variation.price_inclusive_tax
+          `product_price[0][price_exclusive_tax]`,
+          String(values.price_exclusive_tax)
         );
         formdata.append(
-          `product_price[${index}][profit_margin]`,
-          variation.profit_margin
+          `product_price[0][price_inclusive_tax]`,
+          String(values.price_inclusive_tax)
         );
         formdata.append(
-          `product_price[${index}][selling_price]`,
-          variation.selling_price
+          `product_price[0][profit_margin]`,
+          String(values.profit_margin)
         );
         formdata.append(
-          `product_price[${index}][selling_price_inc_tax]`,
-          variation?.selling_price_inc_tax || ""
+          `product_price[0][selling_price_inc_tax]`,
+          String(values.selling_price_inc_tax)
         );
-      });
-    }
-    formdata.append(`product_price[business_id]`, String(values.business_id));
-    formdata.append(`product_locations[]`, values.location_id);
-    formdata.append(`product_images[]`, values.product_images[0]);
-    formdata.append("brand_id", values.brand_id);
-    formdata.append("barcode_id", values.barcode_id);
-    formdata.append("tax_id", values.tax_id);
-    formdata.append("weight", values.weight);
-  
-    if (values.quantity) {
-      formdata.append(
-        `opening_stock[${values.location_id}][quantity][0]`,
-        values.quantity
-      );
-    }
-    formdata.append("category_id", values.category_id);
-      // create({ data: formdata });
-  
-    if (isEditing) {
-      update({ id: true, data: formdata });
-    } else {
+        formdata.append(
+          `product_price[0][selling_price_inc_tax]`,
+          String(values.selling_price_inc_tax)
+        );
+      }
+
+      if (values.type === "variable") {
+        values?.variation_list?.forEach((variation, index) => {
+          formdata.append(
+            `product_price[${index}][price_exclusive_tax]`,
+            variation.price_exclusive_tax
+          );
+          formdata.append(
+            `product_price[${index}][price_inclusive_tax]`,
+            variation.price_inclusive_tax
+          );
+          formdata.append(
+            `product_price[${index}][profit_margin]`,
+            variation.profit_margin
+          );
+          formdata.append(
+            `product_price[${index}][selling_price]`,
+            variation.selling_price
+          );
+          formdata.append(
+            `product_price[${index}][selling_price_inc_tax]`,
+            variation?.selling_price_inc_tax || ""
+          );
+        });
+      }
+      formdata.append(`product_price[business_id]`, String(values.business_id));
+      formdata.append(`product_locations[]`, values.location_id);
+      formdata.append(`product_images[]`, values.product_images[0]);
+      formdata.append("brand_id", values.brand_id);
+      formdata.append("barcode_id", values.barcode_id);
+      formdata.append("tax_id", values.tax_id);
+      formdata.append("weight", values.weight);
+
+      if (values.quantity) {
+        formdata.append(
+          `opening_stock[${values.location_id}][quantity][0]`,
+          values.quantity
+        );
+      }
+      formdata.append("category_id", values.category_id);
       create({ data: formdata });
+    } else {
+      toast.success("Update");
     }
   }
 
@@ -369,531 +309,487 @@ const CreateProduct = () => {
   const loadingData = Array.from({ length: 10 }, (_, index) => index + 1);
   return (
     <>
-    <div className="bg-[#FFFFFF] p-2 rounded-md overflow-hidden space-y-4">
-      <h1 className="text-[#4741E1] font-semibold">
-        {productId ? "Edit Product" : "Add New Product"}
-      </h1>
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="gap-4 grid grid-cols-3 justify-center items-center"
-        >
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input  {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="sku"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>SKU</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                      //  placeholder="Single"
-                      defaultValue={field.value}
-                        />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    <SelectItem value={"single"}>Single</SelectItem>
-                    <SelectItem value={"variable"}>Variable</SelectItem>
-                    <SelectItem value={"combo"}>Combo</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem className="col-span-3">
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {/* <FormField
-            control={form.control}
-            name="location_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Location</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue  />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    {locationsLoading && (
-                      <>
-                        {loadingData?.map((i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {locationsList &&
-                      locationsList?.map((location: Location) => (
-                        <SelectItem
-                          key={location.id}
-                          value={String(location.id)}
-                        >
-                          {location.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          /> */}
-          <FormField
-  control={form.control}
-  name="location_id"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Location</FormLabel>
-      <FormControl>
-        <Select onValueChange={field.onChange}>
-          <SelectTrigger>
-            <SelectValue defaultValue={specificProductData?.location_id || ""} />
-          </SelectTrigger>
-          <SelectContent className="max-h-60">
-            {locationsLoading && (
-              <>
-                {loadingData?.map((i) => (
-                  <SelectItem key={i} value={String(i)}>
-                    <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                  </SelectItem>
-                ))}
-              </>
-            )}
-            {locationsList &&
-              locationsList?.map((location: Location) => (
-                <SelectItem
-                  key={location.id}
-                  value={String(location.id)}
-                >
-                  {location.name}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-      </FormControl>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
-
-          <FormField
-            control={form.control}
-            name="category_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Category</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue  />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    {categoriesLoading && (
-                      <>
-                        {loadingData?.map((i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {categoriesList &&
-                      categoriesList?.map((category: Category) => (
-                        <SelectItem
-                          key={category.id}
-                          value={String(category.id)}
-                        >
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="brand_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Brand</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue  />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    {brandsLoading && (
-                      <>
-                        {loadingData?.map((i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {brandsList &&
-                      brandsList?.map((brand: Brand) => (
-                        <SelectItem key={brand.id} value={String(brand.id)}>
-                          {brand.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="barcode_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Barcode</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    {barcodesLoading && (
-                      <>
-                        {loadingData?.map((i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {barcodesList &&
-                      barcodesList?.map((barcode: Barcode) => (
-                        <SelectItem key={barcode.id} value={String(barcode.id)}>
-                          {barcode.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="tax_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tax</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue  />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    {taxratesLoading && (
-                      <>
-                        {loadingData?.map((i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {taxratesList &&
-                      taxratesList?.map((tax: Taxrate) => (
-                        <SelectItem key={tax.id} value={String(tax.id)}>
-                          {tax.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="unit_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Unit</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue  />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    {unitsLoading && (
-                      <>
-                        {loadingData?.map((i) => (
-                          <SelectItem key={i} value={String(i)}>
-                            <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {unitsList &&
-                      unitsList?.map((unit: Unit) => (
-                        <SelectItem key={unit.id} value={String(unit.id)}>
-                          {unit.actual_name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="weight"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Weight</FormLabel>
-                <FormControl>
-                  <Input {...field} type="number" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="tax_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tax Type</FormLabel>
-                <Select onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue  />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="max-h-60">
-                    <SelectItem value={"inclusive"}>Inclusive</SelectItem>
-                    <SelectItem value={"Exclusive"}>Exclusive</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {form.watch("type") === "single" && (
-            <div className="col-span-3 grid grid-cols-5 gap-4">
-              <FormField
-                control={form.control}
-                name="price_inclusive_tax"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Price Inclusive Tax</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="price_exclusive_tax"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Price Exclusive Tax</FormLabel>
-                    <FormControl>
-                      <Input  {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="profit_margin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Profit Margin</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="selling_price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Selling Price</FormLabel>
-                    <FormControl>
-                      <Input  {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="selling_price_inc_tax"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Selling Price Inc Tax</FormLabel>
-                    <FormControl>
-                      <Input  {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          )}
-          {form.watch("type") === "variable" && (
-            <>
-              <FormField
-                control={form.control}
-                name="variation_id"
-                render={({ field }) => (
-                  <FormItem className="col-span-3">
-                    <FormLabel>Variation</FormLabel>
-                    <Select onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="max-h-60">
-                        {variationsLoading && (
-                          <>
-                            {loadingData?.map((i) => (
-                              <SelectItem key={i} value={String(i)}>
-                                <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
-                              </SelectItem>
-                            ))}
-                          </>
-                        )}
-                        {variationsList &&
-                          variationsList?.map((variation: Variation) => (
-                            <SelectItem
-                              key={variation.id}
-                              value={String(variation.id)}
-                            >
-                              {variation.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {fields?.map((field, index) => (
-                <VariationsInput key={field.id} index={index} form={form} />
-              ))}
-            </>
-          )}
-
-          <FileInput fileAllowed={1} onChange={handleFileSelect} />
-          <FormField
-            control={form.control}
-            name="manage_stock_status"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start gap-4 space-y-0">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-                <FormLabel className="mt-0!">Manage Stock</FormLabel>
-              </FormItem>
-            )}
-          />
-
-          {form.watch("manage_stock_status") && (
+      <div className="bg-[#FFFFFF] p-2 rounded-md overflow-hidden space-y-4">
+        <h1 className="text-[#4741E1] font-semibold">
+          {product ? "Edit Product" : "Add New Product"}
+        </h1>
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="gap-4 grid grid-cols-3 justify-center items-center"
+          >
             <FormField
               control={form.control}
-              name="quantity"
+              name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quantity</FormLabel>
+                  <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input  {...field} type="number" />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          )}
+            <FormField
+              control={form.control}
+              name="sku"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>SKU</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue defaultValue={field.value} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      <SelectItem value={"single"}>Single</SelectItem>
+                      <SelectItem value={"variable"}>Variable</SelectItem>
+                      <SelectItem value={"combo"}>Combo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem className="col-span-3">
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="location_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Location</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      {locationsLoading && (
+                        <>
+                          {loadingData?.map((i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {locationsList &&
+                        locationsList?.map((location: Location) => (
+                          <SelectItem
+                            key={location.id}
+                            value={String(location.id)}
+                          >
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="category_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      {categoriesLoading && (
+                        <>
+                          {loadingData?.map((i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {categoriesList &&
+                        categoriesList?.map((category: Category) => (
+                          <SelectItem
+                            key={category.id}
+                            value={String(category.id)}
+                          >
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="brand_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Brand</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      {brandsLoading && (
+                        <>
+                          {loadingData?.map((i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {brandsList &&
+                        brandsList?.map((brand: Brand) => (
+                          <SelectItem key={brand.id} value={String(brand.id)}>
+                            {brand.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="barcode_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Barcode</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      {barcodesLoading && (
+                        <>
+                          {loadingData?.map((i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {barcodesList &&
+                        barcodesList?.map((barcode: Barcode) => (
+                          <SelectItem
+                            key={barcode.id}
+                            value={String(barcode.id)}
+                          >
+                            {barcode.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <div className="col-span-3 flex items-center justify-center">
+            <FormField
+              control={form.control}
+              name="tax_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      {taxratesLoading && (
+                        <>
+                          {loadingData?.map((i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {taxratesList &&
+                        taxratesList?.map((tax: Taxrate) => (
+                          <SelectItem key={tax.id} value={String(tax.id)}>
+                            {tax.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-    <Button
-        disabled={createLoading || updateLoading}
-        className="w-full"
-        type="submit"
-      >
-        {(createLoading || updateLoading) && (
-          <Loader className="mr-2 h-4 w-4 animate-spin" />
-        )}
-        {productId ? "Update" : "Create"}
-      </Button>
+            <FormField
+              control={form.control}
+              name="unit_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unit</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      {unitsLoading && (
+                        <>
+                          {loadingData?.map((i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {unitsList &&
+                        unitsList?.map((unit: Unit) => (
+                          <SelectItem key={unit.id} value={String(unit.id)}>
+                            {unit.actual_name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="weight"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Weight</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          </div>
-        </form>
+            <FormField
+              control={form.control}
+              name="tax_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax Type</FormLabel>
+                  <Select onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      <SelectItem value={"inclusive"}>Inclusive</SelectItem>
+                      <SelectItem value={"Exclusive"}>Exclusive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {form.watch("type") === "single" && (
+              <div className="col-span-3 grid grid-cols-5 gap-4">
+                <FormField
+                  control={form.control}
+                  name="price_inclusive_tax"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price Inclusive Tax</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="price_exclusive_tax"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price Exclusive Tax</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="profit_margin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Profit Margin</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="selling_price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Selling Price</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="selling_price_inc_tax"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Selling Price Inc Tax</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+            {form.watch("type") === "variable" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="variation_id"
+                  render={({ field }) => (
+                    <FormItem className="col-span-3">
+                      <FormLabel>Variation</FormLabel>
+                      <Select onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-60">
+                          {variationsLoading && (
+                            <>
+                              {loadingData?.map((i) => (
+                                <SelectItem key={i} value={String(i)}>
+                                  <Skeleton className="w-20 h-4 bg-[#F5F5F5]" />
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                          {variationsList &&
+                            variationsList?.map((variation: Variation) => (
+                              <SelectItem
+                                key={variation.id}
+                                value={String(variation.id)}
+                              >
+                                {variation.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {fields?.map((field, index) => (
+                  <VariationsInput key={field.id} index={index} form={form} />
+                ))}
+              </>
+            )}
+
+            <FileInput fileAllowed={1} onChange={handleFileSelect} />
+            <FormField
+              control={form.control}
+              name="manage_stock_status"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-4 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="mt-0!">Manage Stock</FormLabel>
+                </FormItem>
+              )}
+            />
+
+            {form.watch("manage_stock_status") && (
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <div className="col-span-3 flex items-center justify-center">
+              <Button disabled={createLoading} className="w-full" type="submit">
+                {createLoading && (
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {product ? "Update" : "Create"}
+              </Button>
+            </div>
+          </form>
         </Form>
-    </div>
-  
+      </div>
     </>
   );
 };
